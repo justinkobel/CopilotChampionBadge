@@ -17,7 +17,7 @@
 
   // If overlay is cross-origin and you need to download the result to be anonymous. this will fail on file:// URLs, so putting in a try block
  
-  overlayImage.crossOrigin = "anonymous";
+  //overlayImage.crossOrigin = "anonymous";
   overlayImage.src = "CopilotChampionOverlay.png";
   
 
@@ -224,3 +224,84 @@
     }
   });
 
+
+
+  // Elements
+const sizeRange = document.getElementById('sizeRange');
+const sizeOut   = document.getElementById('sizeOut');
+
+// State
+let overlayWidthRatio = parseFloat(sizeRange.value); // 0.28 initial
+
+// Use this ratio in your initial placement logic
+function computeInitialOverlay() {
+  const padding = dynamicPadding();
+  const natW = overlayImage.naturalWidth;
+  const natH = overlayImage.naturalHeight;
+  const aspect = natH / natW;
+
+  let w = Math.round(canvasWidth() * overlayWidthRatio);
+  let h = Math.round(w * aspect);
+
+  const maxH = canvasHeight() - 2 * padding;
+  if (h > maxH) {
+    h = Math.round(maxH);
+    w = Math.round(h / aspect);
+  }
+
+  overlay.x = padding;                            // left-aligned
+  overlay.y = Math.round((canvasHeight() - h) / 2); // centered vertically
+  overlay.w = w;
+  overlay.h = h;
+}
+
+// Resizes overlay around its current center (change anchor if desired)
+function applyOverlaySizeByRatio(anchor = 'center') {
+  const padding = dynamicPadding();
+  const natW = overlayImage.naturalWidth;
+  const natH = overlayImage.naturalHeight;
+  const aspect = natH / natW;
+
+  let anchorX, anchorY;
+  if (anchor === 'center') {
+    anchorX = overlay.x + overlay.w / 2;
+    anchorY = overlay.y + overlay.h / 2;
+  } else if (anchor === 'left') {
+    anchorX = overlay.x;
+    anchorY = overlay.y + overlay.h / 2;
+  } else {
+    anchorX = overlay.x;
+    anchorY = overlay.y;
+  }
+
+  let w = Math.round(canvasWidth() * overlayWidthRatio);
+  let h = Math.round(w * aspect);
+
+  const maxW = canvasWidth()  - 2 * padding;
+  const maxH = canvasHeight() - 2 * padding;
+  if (w > maxW) { w = maxW; h = Math.round(w * aspect); }
+  if (h > maxH) { h = maxH; w = Math.round(h / aspect); }
+
+  if (anchor === 'center') {
+    overlay.x = Math.round(anchorX - w / 2);
+    overlay.y = Math.round(anchorY - h / 2);
+  } else if (anchor === 'left') {
+    overlay.x = Math.round(anchorX);
+    overlay.y = Math.round(anchorY - h / 2);
+  } else {
+    overlay.x = Math.round(anchorX);
+    overlay.y = Math.round(anchorY);
+  }
+  overlay.w = w;
+  overlay.h = h;
+
+  clampOverlay();
+}
+
+// Slider → resize + redraw
+sizeRange.addEventListener('input', () => {
+  overlayWidthRatio = parseFloat(sizeRange.value);
+  sizeOut.textContent = Math.round(overlayWidthRatio * 100) + '%';
+  applyOverlaySizeByRatio('center');  // or 'left' to keep left edge fixed
+  drawAll();
+});
