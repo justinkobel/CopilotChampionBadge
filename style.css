@@ -33,3 +33,9 @@ canvas {
   box-align: left;
   text-align:left;
 }
+
+.footer {
+    margin-top: 20px;
+    background-color: #f4f4f4;
+    padding: 10px;
+}
