@@ -1,78 +1,96 @@
-  const upload = document.getElementById("upload");
-  const canvas = document.getElementById("canvas");
-  const ctx = canvas.getContext("2d");
-  const downloadBtn = document.getElementById("download");
-  const resetBtn = document.getElementById("reset");
+const upload = document.getElementById("upload");
+const canvas = document.getElementById("canvas");
+const ctx = canvas.getContext("2d");
+const downloadBtn = document.getElementById("download");
+const showGuideCheckbox = document.getElementById("showGuide");
+const resetBtn = document.getElementById("reset");
+const canvasContainer = document.getElementById("canvasContainer");
 
-  // === Tunables ===
-  const OVERLAY_WIDTH_RATIO = 0.28; // overlay width as % of image width
-  const BASE_PADDING_PX     = 12;   // min padding to edges
-  const CLAMP_WITHIN_BOUNDS = true; // keep overlay fully inside canvas
-  const NUDGE_STEP          = 1;    // arrow keys (px)
-  const NUDGE_STEP_FAST     = 8;    // arrow keys with Shift (px)
+// === Tunables ===
+const OVERLAY_WIDTH_RATIO = 0.28; // overlay width as % of image width
+const BASE_PADDING_PX = 4;   // min padding to edges
+const CLAMP_WITHIN_BOUNDS = true; // keep overlay fully inside canvas
+const NUDGE_STEP = 1;    // arrow keys (px)
+const NUDGE_STEP_FAST = 8;    // arrow keys with Shift (px)
 
-  // Images
-  let headshot = null;
-  const overlayImage = new Image();
+// Images
+let headshot = null;
+const overlayImage = new Image();
 
-  // If overlay is cross-origin and you need to download the result to be anonymous. this will fail on file:// URLs, so putting in a try block
- 
-  //overlayImage.crossOrigin = "anonymous";
-  overlayImage.src = "CopilotChampionOverlay.png";
-  
+// If overlay is cross-origin and you need to download the result to be anonymous. this will fail on file:// URLs, so putting in a try block
 
-  // State for overlay rectangle (in CSS pixel coordinates)
-  const overlay = { x: 0, y: 0, w: 0, h: 0 };
+//overlayImage.crossOrigin = "anonymous";
+overlayImage.src = "CopilotChampionOverlay.png";
 
-  // Drag state
-  let isDragging = false;
-  let dragOffsetX = 0;
-  let dragOffsetY = 0;
+canvasContainer.style.display = "none"; // hide canvas container until image is loaded
 
-  // For crisp rendering on high-DPI displays, we’ll draw in CSS pixel units and scale the backing store.
-  function setupHiDPI() {
+// State for overlay rectangle (in CSS pixel coordinates)
+const overlay = { x: 0, y: 0, w: 0, h: 0 };
+
+// Drag state
+let isDragging = false;
+let dragOffsetX = 0;
+let dragOffsetY = 0;
+
+// For crisp rendering on high-DPI displays, we’ll draw in CSS pixel units and scale the backing store.
+function setupHiDPI() {
     const dpr = window.devicePixelRatio || 1;
     // Keep the "CSS size" equal to the image size (in CSS pixels)
-    const cssWidth  = headshot.naturalWidth;
+    const cssWidth = headshot.naturalWidth;
     const cssHeight = headshot.naturalHeight;
 
     // Backing store size is scaled by DPR
-    canvas.width  = Math.max(1, Math.round(cssWidth  * dpr));
+    canvas.width = Math.max(1, Math.round(cssWidth * dpr));
     canvas.height = Math.max(1, Math.round(cssHeight * dpr));
 
     // Reset transform and apply DPR scaling so all coords are in CSS pixels
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
 
     // Also set the canvas element's logical (CSS) size so it can downscale responsively
-    canvas.style.width  = cssWidth + "px";
+    canvas.style.width = cssWidth + "px";
     canvas.style.height = cssHeight + "px";
-  }
+}
 
-  function whenLoaded(img) {
+function whenLoaded(img) {
     if (img.complete && img.naturalWidth > 0) return Promise.resolve();
     return new Promise((resolve, reject) => {
-      img.onload = () => resolve();
-      img.onerror = reject;
+        img.onload = () => resolve();
+        img.onerror = reject;
     });
-  }
+}
 
-  function drawAll() {
+function drawAll(showGuide) {
     if (!headshot) return;
     // Clear and redraw
+
     ctx.clearRect(0, 0, canvasWidth(), canvasHeight());
     ctx.imageSmoothingEnabled = true;
     ctx.imageSmoothingQuality = "high";
     ctx.drawImage(headshot, 0, 0, canvasWidth(), canvasHeight());
     // Draw overlay
     if (overlayImage.complete && overlayImage.naturalWidth > 0) {
-      ctx.drawImage(overlayImage, overlay.x, overlay.y, overlay.w, overlay.h);
+        ctx.drawImage(overlayImage, overlay.x, overlay.y, overlay.w, overlay.h);
     }
-  }
 
-  function canvasWidth()  { return headshot ? headshot.naturalWidth  : canvas.width; }
-  function canvasHeight() { return headshot ? headshot.naturalHeight : canvas.height; }
+    //Draw the guide circle if requested
+    if (showGuide) {
+        const centerX = canvasWidth() / 2;
+        const centerY = canvasHeight() / 2;
+        const radius = Math.min(canvasWidth(), canvasHeight()) / 2 - 10;
 
-  function computeInitialOverlay() {
+        ctx.beginPath();
+        ctx.arc(centerX, centerY, radius, 0, 2 * Math.PI);
+        ctx.strokeStyle = 'rgba(44, 38, 38, 0.8)'; // darkish  border
+        ctx.lineWidth = 5;
+        ctx.stroke();
+
+    }
+}
+
+function canvasWidth() { return headshot ? headshot.naturalWidth : canvas.width; }
+function canvasHeight() { return headshot ? headshot.naturalHeight : canvas.height; }
+
+function computeInitialOverlay() {
     const padding = dynamicPadding();
     const natW = overlayImage.naturalWidth;
     const natH = overlayImage.naturalHeight;
@@ -84,8 +102,8 @@
     // Fit by height if needed
     const maxH = canvasHeight() - 2 * padding;
     if (h > maxH) {
-      h = Math.round(maxH);
-      w = Math.round(h / aspect);
+        h = Math.round(maxH);
+        w = Math.round(h / aspect);
     }
 
     // Left-aligned with padding, vertically centered
@@ -96,35 +114,35 @@
     overlay.y = y;
     overlay.w = w;
     overlay.h = h;
-  }
+}
 
-  function dynamicPadding() {
+function dynamicPadding() {
     return Math.round(Math.max(BASE_PADDING_PX, canvasWidth() * 0.015));
-  }
+}
 
-  // Hit test: is point inside current overlay rect?
-  function hitOverlay(px, py) {
+// Hit test: is point inside current overlay rect?
+function hitOverlay(px, py) {
     return (
-      px >= overlay.x &&
-      py >= overlay.y &&
-      px <= overlay.x + overlay.w &&
-      py <= overlay.y + overlay.h
+        px >= overlay.x &&
+        py >= overlay.y &&
+        px <= overlay.x + overlay.w &&
+        py <= overlay.y + overlay.h
     );
-  }
+}
 
-  // Get pointer position in canvas CSS-pixel coordinates
-  function getCanvasPoint(evt) {
+// Get pointer position in canvas CSS-pixel coordinates
+function getCanvasPoint(evt) {
     const rect = canvas.getBoundingClientRect();
     // Scale client coords into canvas CSS pixels
     const scaleX = canvasWidth() / rect.width;
     const scaleY = canvasHeight() / rect.height;
     return {
-      x: (evt.clientX - rect.left) * scaleX,
-      y: (evt.clientY - rect.top) * scaleY
+        x: (evt.clientX - rect.left) * scaleX,
+        y: (evt.clientY - rect.top) * scaleY
     };
-  }
+}
 
-  function clampOverlay() {
+function clampOverlay() {
     if (!CLAMP_WITHIN_BOUNDS) return;
     const pad = dynamicPadding();
     const minX = pad;
@@ -133,175 +151,186 @@
     const maxY = canvasHeight() - pad - overlay.h;
     overlay.x = Math.min(Math.max(overlay.x, minX), maxX);
     overlay.y = Math.min(Math.max(overlay.y, minY), maxY);
-  }
+}
 
-  // Pointer Events (mouse/touch/pen unified)
-  canvas.addEventListener("pointerdown", (e) => {
+// Pointer Events (mouse/touch/pen unified)
+canvas.addEventListener("pointerdown", (e) => {
     if (!headshot) return;
     const p = getCanvasPoint(e);
     if (hitOverlay(p.x, p.y)) {
-      isDragging = true;
-      dragOffsetX = p.x - overlay.x;
-      dragOffsetY = p.y - overlay.y;
-      canvas.classList.add("dragging");
-      canvas.setPointerCapture(e.pointerId);
-      e.preventDefault();
+        isDragging = true;
+        dragOffsetX = p.x - overlay.x;
+        dragOffsetY = p.y - overlay.y;
+        canvas.classList.add("dragging");
+        canvas.setPointerCapture(e.pointerId);
+        e.preventDefault();
     }
-  });
+});
 
-  canvas.addEventListener("pointermove", (e) => {
+canvas.addEventListener("pointermove", (e) => {
     if (!isDragging) return;
     const p = getCanvasPoint(e);
     overlay.x = Math.round(p.x - dragOffsetX);
     overlay.y = Math.round(p.y - dragOffsetY);
     clampOverlay();
-    drawAll();
+    drawAll(showGuideCheckbox.checked); // Show guide circle while dragging  
     e.preventDefault();
-  });
+});
 
-  function endDrag(e) {
+function endDrag(e) {
     if (!isDragging) return;
     isDragging = false;
     canvas.classList.remove("dragging");
-    try { canvas.releasePointerCapture(e.pointerId); } catch {}
-  }
+    try { canvas.releasePointerCapture(e.pointerId); } catch { }
+}
 
-  canvas.addEventListener("pointerup", endDrag);
-  canvas.addEventListener("pointercancel", endDrag);
-  canvas.addEventListener("pointerleave", endDrag); // safety
+canvas.addEventListener("pointerup", endDrag);
+canvas.addEventListener("pointercancel", endDrag);
+canvas.addEventListener("pointerleave", endDrag); // safety
 
-  // Keyboard nudging (arrow keys). Focus the page or the canvas to use.
-  window.addEventListener("keydown", (e) => {
+// Keyboard nudging (arrow keys). Focus the page or the canvas to use.
+window.addEventListener("keydown", (e) => {
     if (!headshot) return;
     const fast = e.shiftKey ? NUDGE_STEP_FAST : NUDGE_STEP;
     let moved = false;
-    if (e.key === "ArrowLeft")  { overlay.x -= fast; moved = true; }
+    if (e.key === "ArrowLeft") { overlay.x -= fast; moved = true; }
     if (e.key === "ArrowRight") { overlay.x += fast; moved = true; }
-    if (e.key === "ArrowUp")    { overlay.y -= fast; moved = true; }
-    if (e.key === "ArrowDown")  { overlay.y += fast; moved = true; }
+    if (e.key === "ArrowUp") { overlay.y -= fast; moved = true; }
+    if (e.key === "ArrowDown") { overlay.y += fast; moved = true; }
     if (moved) {
-      clampOverlay();
-      drawAll();
-      e.preventDefault();
+        clampOverlay();
+        drawAll(showGuideCheckbox.checked); // Show guide circle while nudging   
+        e.preventDefault();
     }
-  });
+});
 
-    // Upload workflow
-  upload.addEventListener("change", async (e) => {
+// Upload workflow
+upload.addEventListener("change", async (e) => {
     const file = e.target.files[0];
     if (!file) return;
     const reader = new FileReader();
     reader.onload = async (event) => {
-      try {
-        headshot = new Image();
-        headshot.src = event.target.result;
-        await whenLoaded(headshot);
-        await whenLoaded(overlayImage);
+        try {
+            headshot = new Image();
+            headshot.src = event.target.result;
+            await whenLoaded(headshot);
+            await whenLoaded(overlayImage);
 
-        // Prepare canvas for crisp drawing at devicePixelRatio
-        setupHiDPI();
+            canvasContainer.style.display = "block"; // Show canvas container
 
-        // Place overlay initially on the left, vertically centered
-        computeInitialOverlay();
+            // Prepare canvas for crisp drawing at devicePixelRatio
+            setupHiDPI();
 
-        drawAll();
-      } catch (err) {
-        console.error("Failed to render:", err);
-      }
+            // Place overlay initially on the left, vertically centered
+            computeInitialOverlay();
+
+            drawAll(showGuideCheckbox.checked); // Show guide circle on first load
+            canvas.classList.remove("dragging"); // Reset dragging state
+        } catch (err) {
+            console.error("Failed to render:", err);
+        }
     };
     reader.readAsDataURL(file);
-  });
+});
 
-  // Download button
-  downloadBtn.addEventListener("click", () => {
+// Download button
+downloadBtn.addEventListener("click", () => {
     try {
-      const link = document.createElement("a");
-      link.download = "CopilotChampion-TeamsImage.png";
-      link.href = canvas.toDataURL("image/png");
-      link.click();
+        showGuideCheckbox.checked = false; // keep the checkbox in sync with the hidding of the guide circle
+        ctx.clearRect(0, 0, canvasWidth(), canvasHeight()); // Clear canvas
+        drawAll(showGuide = false); // Hide guide circle for download
+        const link = document.createElement("a");
+        link.download = "CopilotChampion-TeamsImage.png";
+        link.href = canvas.toDataURL("image/png");
+        link.click();
     } catch (err) {
-      console.error("Download failed (possible CORS issue):", err);
+        console.error("Download failed (possible CORS issue):", err);
     }
-  });
+});
 
 
 
-  // Elements
+
+// Elements
 const sizeRange = document.getElementById('sizeRange');
-const sizeOut   = document.getElementById('sizeOut');
+const sizeOut = document.getElementById('sizeOut');
 
 // State
 let overlayWidthRatio = parseFloat(sizeRange.value); // 0.28 initial
 
 // Use this ratio in your initial placement logic
 function computeInitialOverlay() {
-  const padding = dynamicPadding();
-  const natW = overlayImage.naturalWidth;
-  const natH = overlayImage.naturalHeight;
-  const aspect = natH / natW;
+    const padding = dynamicPadding();
+    const natW = overlayImage.naturalWidth;
+    const natH = overlayImage.naturalHeight;
+    const aspect = natH / natW;
 
-  let w = Math.round(canvasWidth() * overlayWidthRatio);
-  let h = Math.round(w * aspect);
+    let w = Math.round(canvasWidth() * overlayWidthRatio);
+    let h = Math.round(w * aspect);
 
-  const maxH = canvasHeight() - 2 * padding;
-  if (h > maxH) {
-    h = Math.round(maxH);
-    w = Math.round(h / aspect);
-  }
+    const maxH = canvasHeight() - 2 * padding;
+    if (h > maxH) {
+        h = Math.round(maxH);
+        w = Math.round(h / aspect);
+    }
 
-  overlay.x = padding;                            // left-aligned
-  overlay.y = Math.round((canvasHeight() - h) / 2); // centered vertically
-  overlay.w = w;
-  overlay.h = h;
+    overlay.x = padding;                            // left-aligned
+    overlay.y = Math.round((canvasHeight() - h) / 2); // centered vertically
+    overlay.w = w;
+    overlay.h = h;
 }
 
 // Resizes overlay around its current center (change anchor if desired)
 function applyOverlaySizeByRatio(anchor = 'center') {
-  const padding = dynamicPadding();
-  const natW = overlayImage.naturalWidth;
-  const natH = overlayImage.naturalHeight;
-  const aspect = natH / natW;
+    const padding = dynamicPadding();
+    const natW = overlayImage.naturalWidth;
+    const natH = overlayImage.naturalHeight;
+    const aspect = natH / natW;
 
-  let anchorX, anchorY;
-  if (anchor === 'center') {
-    anchorX = overlay.x + overlay.w / 2;
-    anchorY = overlay.y + overlay.h / 2;
-  } else if (anchor === 'left') {
-    anchorX = overlay.x;
-    anchorY = overlay.y + overlay.h / 2;
-  } else {
-    anchorX = overlay.x;
-    anchorY = overlay.y;
-  }
+    let anchorX, anchorY;
+    if (anchor === 'center') {
+        anchorX = overlay.x + overlay.w / 2;
+        anchorY = overlay.y + overlay.h / 2;
+    } else if (anchor === 'left') {
+        anchorX = overlay.x;
+        anchorY = overlay.y + overlay.h / 2;
+    } else {
+        anchorX = overlay.x;
+        anchorY = overlay.y;
+    }
 
-  let w = Math.round(canvasWidth() * overlayWidthRatio);
-  let h = Math.round(w * aspect);
+    let w = Math.round(canvasWidth() * overlayWidthRatio);
+    let h = Math.round(w * aspect);
 
-  const maxW = canvasWidth()  - 2 * padding;
-  const maxH = canvasHeight() - 2 * padding;
-  if (w > maxW) { w = maxW; h = Math.round(w * aspect); }
-  if (h > maxH) { h = maxH; w = Math.round(h / aspect); }
+    const maxW = canvasWidth() - 2 * padding;
+    const maxH = canvasHeight() - 2 * padding;
+    if (w > maxW) { w = maxW; h = Math.round(w * aspect); }
+    if (h > maxH) { h = maxH; w = Math.round(h / aspect); }
 
-  if (anchor === 'center') {
-    overlay.x = Math.round(anchorX - w / 2);
-    overlay.y = Math.round(anchorY - h / 2);
-  } else if (anchor === 'left') {
-    overlay.x = Math.round(anchorX);
-    overlay.y = Math.round(anchorY - h / 2);
-  } else {
-    overlay.x = Math.round(anchorX);
-    overlay.y = Math.round(anchorY);
-  }
-  overlay.w = w;
-  overlay.h = h;
+    if (anchor === 'center') {
+        overlay.x = Math.round(anchorX - w / 2);
+        overlay.y = Math.round(anchorY - h / 2);
+    } else if (anchor === 'left') {
+        overlay.x = Math.round(anchorX);
+        overlay.y = Math.round(anchorY - h / 2);
+    } else {
+        overlay.x = Math.round(anchorX);
+        overlay.y = Math.round(anchorY);
+    }
+    overlay.w = w;
+    overlay.h = h;
 
-  clampOverlay();
+    clampOverlay();
 }
 
 // Slider → resize + redraw
 sizeRange.addEventListener('input', () => {
-  overlayWidthRatio = parseFloat(sizeRange.value);
-  sizeOut.textContent = Math.round(overlayWidthRatio * 100) + '%';
-  applyOverlaySizeByRatio('center');  // or 'left' to keep left edge fixed
-  drawAll();
+    overlayWidthRatio = parseFloat(sizeRange.value);
+    sizeOut.textContent = Math.round(overlayWidthRatio * 100) + '%';
+    applyOverlaySizeByRatio('center');  // or 'left' to keep left edge fixed
+    drawAll(showGuideCheckbox.checked); // Show guide circle after resizing
 });
+
+showGuideCheckbox.addEventListener('input', () => {
+    drawAll(showGuideCheckbox.checked);
+})
